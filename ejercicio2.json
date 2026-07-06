@@ -1,0 +1,10 @@
+{
+  "producto": {
+    "id": 101,
+    "nombre": "PlayGo",
+    "categoria": "Tecnología",
+    "precio": 89900,
+    "stock": 25,
+    "disponible": true
+  }
+}
