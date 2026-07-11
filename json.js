@@ -1,4 +1,4 @@
-[
+const usuarios = [
     {
         "_id": 1,
         "nombre": "Ana",
@@ -108,4 +108,10 @@
             }
         ]
     }
-]
+];
+
+module.exports = usuarios;
+
+if (require.main === module) {
+    console.log(JSON.stringify(usuarios, null, 2));
+}
