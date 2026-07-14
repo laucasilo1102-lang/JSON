@@ -5,6 +5,7 @@
         "apellido": "Gomez",
         "edad": 8,
         "email": "ana@gmail.com",
+        "estado": "pendiente",
         "password": "123456",
         "perfil": {
             "telefono": "3001111111",
@@ -29,6 +30,7 @@
         "apellido": "Perez",
         "edad": 15,
         "email": "carlos@gmail.com",
+        "estado": "procesado",
         "password": "123456",
         "perfil": {
             "telefono": "3002222222",
@@ -53,6 +55,7 @@
         "apellido": "Martinez",
         "edad": 22,
         "email": "laura@gmail.com",
+        "estado": "finalizado",
         "password": "123456",
         "perfil": {
             "telefono": "3003333333",
@@ -77,6 +80,7 @@
         "apellido": "Ramirez",
         "edad": 9,
         "email": "pedro@gmail.com",
+        "estado": "pendiente",
         "password": "123456",
         "perfil": {
             "telefono": "3004444444",
@@ -90,6 +94,7 @@
         "apellido": "Lopez",
         "edad": 30,
         "email": "sofia@gmail.com",
+        "estado": "pendiente",
         "password": "123456",
         "perfil": {
             "telefono": "3005555555",
