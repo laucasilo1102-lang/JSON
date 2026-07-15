@@ -26,8 +26,16 @@ async function obtenerSiguienteId() {
 }
 
 function responderError(res, error, mensaje) {
-    if (error.name === 'ValidationError') {
-        const errores = Object.values(error.errors).map((detalle) => detalle.message);
+    console.error(error);
+
+    if (
+        error.name === 'ValidationError' ||
+        (error.message && error.message.includes('validation failed'))
+    ) {
+        const errores = error.errors
+            ? Object.values(error.errors).map(detalle => detalle.message)
+            : [error.message];
+
         return res.status(400).send({
             mensaje: 'Los datos enviados no son validos',
             errores
@@ -39,9 +47,13 @@ function responderError(res, error, mensaje) {
             mensaje: 'Ya existe un usuario con ese email'
         });
     }
-
-    return res.status(500).send({ mensaje, error: error.message });
+res
+    return res.status(500).send({
+        mensaje,
+        error: error.message
+    });
 }
+
 
 async function obtenerUsuarios(req, res) {
     try {
@@ -68,7 +80,6 @@ async function crearUsuario(req, res) {
         };
         const usuarioNuevo = new Usuario(datosUsuario);
 
-        // Mongoose valida los datos antes de guardar el usuario.
         await usuarioNuevo.validate();
 
         if (!mongoEstaConectado()) {
