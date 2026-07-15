@@ -1,18 +1,18 @@
 const express = require('express');
 const {
-    listarUsuarios,
+    obtenerUsuarios,
     crearUsuario,
     actualizarUsuario,
     eliminarUsuario,
-    actualizarEstadoUsuario
-} = require('../controllers/usuarios.controller');
+    actualizarEstado
+} = require('../controllers/usuarioController');
 
 const router = express.Router();
 
-router.get('/usuarios', listarUsuarios);
+router.get('/usuarios', obtenerUsuarios);
 router.post('/usuarios', crearUsuario);
 router.put('/usuarios/:id', actualizarUsuario);
 router.delete('/usuarios/:id', eliminarUsuario);
-router.patch('/actualizar-estado/:id', actualizarEstadoUsuario);
+router.patch('/actualizar-estado/:id', actualizarEstado);
 
 module.exports = router;

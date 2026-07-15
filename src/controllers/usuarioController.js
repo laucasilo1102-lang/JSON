@@ -1,18 +1,10 @@
-const mongoose = require('mongoose');
 const usuariosJson = require('../../ejercicio2.json');
+const Usuario = require('../models/Usuario');
 
 const usuariosMemoria = [...usuariosJson];
 
-const usuarioSchema = new mongoose.Schema({}, {
-    strict: false,
-    collection: 'usuarios',
-    timestamps: true
-});
-
-const Usuario = mongoose.model('Usuario', usuarioSchema);
-
 function mongoEstaConectado() {
-    return mongoose.connection.readyState === 1;
+    return Usuario.db.readyState === 1;
 }
 
 function obtenerFiltroPorId(id) {
@@ -24,7 +16,34 @@ function ocultarPassword(usuario) {
     return usuarioSinPassword;
 }
 
-async function listarUsuarios(req, res) {
+async function obtenerSiguienteId() {
+    if (!mongoEstaConectado()) {
+        return Math.max(0, ...usuariosMemoria.map((usuario) => Number(usuario._id) || 0)) + 1;
+    }
+
+    const ultimoUsuario = await Usuario.findOne({}, { _id: 1 }).sort({ _id: -1 }).lean();
+    return (Number(ultimoUsuario?._id) || 0) + 1;
+}
+
+function responderError(res, error, mensaje) {
+    if (error.name === 'ValidationError') {
+        const errores = Object.values(error.errors).map((detalle) => detalle.message);
+        return res.status(400).send({
+            mensaje: 'Los datos enviados no son validos',
+            errores
+        });
+    }
+
+    if (error.code === 11000) {
+        return res.status(409).send({
+            mensaje: 'Ya existe un usuario con ese email'
+        });
+    }
+
+    return res.status(500).send({ mensaje, error: error.message });
+}
+
+async function obtenerUsuarios(req, res) {
     try {
         if (!mongoEstaConectado()) {
             return res.status(200).send(usuariosMemoria.map(ocultarPassword));
@@ -33,7 +52,7 @@ async function listarUsuarios(req, res) {
         const usuarios = await Usuario.find({}, { password: 0, __v: 0 }).lean();
         return res.status(200).send(usuarios);
     } catch (error) {
-        return res.status(500).send({ mensaje: 'No se pudieron obtener los usuarios', error: error.message });
+        return responderError(res, error, 'No se pudieron obtener los usuarios');
     }
 }
 
@@ -43,16 +62,25 @@ async function crearUsuario(req, res) {
             return res.status(400).send({ mensaje: 'El cuerpo de la peticion no puede estar vacio' });
         }
 
+        const datosUsuario = {
+            _id: req.body._id ?? await obtenerSiguienteId(),
+            ...req.body
+        };
+        const usuarioNuevo = new Usuario(datosUsuario);
+
+        // Mongoose valida los datos antes de guardar el usuario.
+        await usuarioNuevo.validate();
+
         if (!mongoEstaConectado()) {
-            const usuario = { _id: usuariosMemoria.length + 1, ...req.body };
+            const usuario = usuarioNuevo.toObject();
             usuariosMemoria.push(usuario);
-            return res.status(201).send({ mensaje: 'Usuario creado correctamente en memoria', usuario });
+            return res.status(201).send({ mensaje: 'Usuario creado correctamente en memoria', usuario: ocultarPassword(usuario) });
         }
 
-        const usuario = await Usuario.create(req.body);
-        return res.status(201).send({ mensaje: 'Usuario creado correctamente', usuario });
+        const usuario = await usuarioNuevo.save();
+        return res.status(201).send({ mensaje: 'Usuario creado correctamente', usuario: ocultarPassword(usuario.toObject()) });
     } catch (error) {
-        return res.status(500).send({ mensaje: 'No se pudo crear el usuario', error: error.message });
+        return responderError(res, error, 'No se pudo crear el usuario');
     }
 }
 
@@ -71,20 +99,20 @@ async function actualizarUsuario(req, res) {
             usuariosMemoria[indice] = { ...usuariosMemoria[indice], ...req.body };
             return res.status(200).send({
                 mensaje: 'Usuario actualizado correctamente en memoria',
-                usuario: usuariosMemoria[indice]
+                usuario: ocultarPassword(usuariosMemoria[indice])
             });
         }
 
         const usuario = await Usuario.findOneAndUpdate(
             filtro,
             { $set: req.body },
-            { new: true, projection: { password: 0, __v: 0 } }
+            { new: true, runValidators: true, projection: { password: 0, __v: 0 } }
         ).lean();
 
         if (!usuario) return res.status(404).send({ mensaje: 'Usuario no encontrado' });
         return res.status(200).send({ mensaje: 'Usuario actualizado correctamente', usuario });
     } catch (error) {
-        return res.status(500).send({ mensaje: 'No se pudo actualizar el usuario', error: error.message });
+        return responderError(res, error, 'No se pudo actualizar el usuario');
     }
 }
 
@@ -97,7 +125,7 @@ async function eliminarUsuario(req, res) {
             if (indice === -1) return res.status(404).send({ mensaje: 'Usuario no encontrado' });
 
             const usuario = usuariosMemoria.splice(indice, 1)[0];
-            return res.status(200).send({ mensaje: 'Usuario eliminado correctamente en memoria', usuario });
+            return res.status(200).send({ mensaje: 'Usuario eliminado correctamente en memoria', usuario: ocultarPassword(usuario) });
         }
 
         const usuario = await Usuario.findOneAndDelete(filtro, { projection: { password: 0, __v: 0 } }).lean();
@@ -105,34 +133,26 @@ async function eliminarUsuario(req, res) {
 
         return res.status(200).send({ mensaje: 'Usuario eliminado correctamente', usuario });
     } catch (error) {
-        return res.status(500).send({ mensaje: 'No se pudo eliminar el usuario', error: error.message });
+        return responderError(res, error, 'No se pudo eliminar el usuario');
     }
 }
 
-async function actualizarEstadoUsuario(req, res) {
+async function actualizarEstado(req, res) {
     try {
         const estadosValidos = ['pendiente', 'procesado', 'finalizado'];
         const { estado } = req.body;
 
         if (!estadosValidos.includes(estado)) {
-            return res.status(400).send({
-                mensaje: 'El estado debe ser pendiente, procesado o finalizado'
-            });
+            return res.status(400).send({ mensaje: 'El estado debe ser pendiente, procesado o finalizado' });
         }
 
         const filtro = obtenerFiltroPorId(req.params.id);
 
         if (!mongoEstaConectado()) {
             const indice = usuariosMemoria.findIndex((usuario) => usuario._id === filtro._id);
-
-            if (indice === -1) {
-                return res.status(404).send({ mensaje: 'Usuario no encontrado' });
-            }
-
+            if (indice === -1) return res.status(404).send({ mensaje: 'Usuario no encontrado' });
             if (usuariosMemoria[indice].estado === 'finalizado') {
-                return res.status(403).send({
-                    mensaje: 'No se puede modificar un usuario con estado finalizado'
-                });
+                return res.status(403).send({ mensaje: 'No se puede modificar un usuario con estado finalizado' });
             }
 
             usuariosMemoria[indice].estado = estado;
@@ -143,39 +163,27 @@ async function actualizarEstadoUsuario(req, res) {
         }
 
         const usuario = await Usuario.findOne(filtro).lean();
-
-        if (!usuario) {
-            return res.status(404).send({ mensaje: 'Usuario no encontrado' });
-        }
-
+        if (!usuario) return res.status(404).send({ mensaje: 'Usuario no encontrado' });
         if (usuario.estado === 'finalizado') {
-            return res.status(403).send({
-                mensaje: 'No se puede modificar un usuario con estado finalizado'
-            });
+            return res.status(403).send({ mensaje: 'No se puede modificar un usuario con estado finalizado' });
         }
 
         const usuarioActualizado = await Usuario.findOneAndUpdate(
             filtro,
             { $set: { estado } },
-            { new: true, projection: { password: 0, __v: 0 } }
+            { new: true, runValidators: true, projection: { password: 0, __v: 0 } }
         ).lean();
 
-        return res.status(200).send({
-            mensaje: 'Estado actualizado correctamente',
-            usuario: usuarioActualizado
-        });
+        return res.status(200).send({ mensaje: 'Estado actualizado correctamente', usuario: usuarioActualizado });
     } catch (error) {
-        return res.status(500).send({
-            mensaje: 'No se pudo actualizar el estado',
-            error: error.message
-        });
+        return responderError(res, error, 'No se pudo actualizar el estado');
     }
 }
 
 module.exports = {
-    listarUsuarios,
+    obtenerUsuarios,
     crearUsuario,
     actualizarUsuario,
     eliminarUsuario,
-    actualizarEstadoUsuario
+    actualizarEstado
 };
