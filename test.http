@@ -1,0 +1,50 @@
+@baseUrl = http://localhost:3000
+# @baseUrl = https://json-delta-one.vercel.app
+
+### Estado de la API
+GET {{baseUrl}}/
+
+### Categorias
+# @name crearCategoria
+POST {{baseUrl}}/api/v1/categorias
+Content-Type: application/json
+
+{
+  "nombre": "Deportes",
+  "descripcion": "Articulos deportivos y accesorios"
+}
+
+GET {{baseUrl}}/api/v1/categorias
+
+### Productos
+# @name crearProducto
+POST {{baseUrl}}/api/v1/productos
+Content-Type: application/json
+
+{
+  "nombre": "Balon de futbol",
+  "categoria": "{{crearCategoria.response.body.$.categoria._id}}",
+  "precio": 85000,
+  "stock": 10,
+  "disponible": true
+}
+
+GET {{baseUrl}}/api/v1/productos
+
+### Usuarios
+# @name crearUsuario
+POST {{baseUrl}}/api/v1/usuarios
+Content-Type: application/json
+
+{
+  "_id": 10,
+  "nombre": "Sofia",
+  "apellido": "Rodriguez",
+  "edad": 24,
+  "email": "sofia.rodriguez@example.com",
+  "password": "123456",
+  "perfil": { "telefono": "3005555555", "ciudad": "Bogota" },
+  "productos": ["{{crearProducto.response.body.$.producto._id}}"]
+}
+
+GET {{baseUrl}}/api/v1/usuarios

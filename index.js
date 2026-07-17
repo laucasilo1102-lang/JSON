@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 const usuariosRoutes = require('./src/routes/usuarios');
+const categoriasRoutes = require('./src/routes/categorias');
+const productosRoutes = require('./src/routes/productos');
 
 const app = express();
 
@@ -17,7 +19,20 @@ const middlewareRevision = (req, res, next) => {
 };
 
 app.use(middlewareRevision);
+
+app.get('/', (req, res) => {
+    return res.status(200).send({
+        mensaje: 'API funcionando correctamente',
+        endpoints: {
+            usuarios: '/api/v1/usuarios',
+            categorias: '/api/v1/categorias',
+            productos: '/api/v1/productos'
+        }
+    });
+});
 app.use('/api/v1', usuariosRoutes);
+app.use('/api/v1/categorias', categoriasRoutes);
+app.use('/api/v1/productos', productosRoutes);
 
 if (process.env.MONGO_URI) {
     mongoose.connect(process.env.MONGO_URI, { dbName: 'BaseDeDatos' })
@@ -29,8 +44,9 @@ if (process.env.MONGO_URI) {
     console.log('MONGO_URI no esta configurado. Se usaran los datos del JSON local.');
 }
 
-const PORT = process.env.PORT || 3000;
+if (require.main === module) {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => console.log('Servidor escuchando en el puerto', PORT));
+}
 
-app.listen(PORT, () => {
-    console.log('Servidor escuchando en el puerto', PORT);
-});
+module.exports = app;

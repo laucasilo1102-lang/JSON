@@ -1,5 +1,7 @@
 const usuariosJson = require('../../ejercicio2.json');
+const mongoose = require('mongoose');
 const Usuario = require('../models/Usuario');
+const Producto = require('../models/Producto');
 
 const usuariosMemoria = [...usuariosJson];
 
@@ -14,6 +16,13 @@ function obtenerFiltroPorId(id) {
 function ocultarPassword(usuario) {
     const { password, ...usuarioSinPassword } = usuario;
     return usuarioSinPassword;
+}
+
+async function productosExisten(productos = []) {
+    if (!productos.length) return true;
+    const idsUnicos = [...new Set(productos.map(String))];
+    const cantidad = await Producto.countDocuments({ _id: { $in: idsUnicos } });
+    return cantidad === idsUnicos.length;
 }
 
 async function obtenerSiguienteId() {
@@ -47,7 +56,6 @@ function responderError(res, error, mensaje) {
             mensaje: 'Ya existe un usuario con ese email'
         });
     }
-res
     return res.status(500).send({
         mensaje,
         error: error.message
@@ -62,6 +70,15 @@ async function obtenerUsuarios(req, res) {
         }
 
         const usuarios = await Usuario.find({}, { password: 0, __v: 0 }).lean();
+        const idsProductos = usuarios.flatMap(usuario => usuario.productos || [])
+            .filter(productoId => mongoose.isObjectIdOrHexString(productoId));
+        const productos = await Producto.find({ _id: { $in: idsProductos } }).populate('categoria').lean();
+        const productosPorId = new Map(productos.map(producto => [String(producto._id), producto]));
+        for (const usuario of usuarios) {
+            usuario.productos = (usuario.productos || []).map(producto =>
+                mongoose.isObjectIdOrHexString(producto) ? productosPorId.get(String(producto)) || producto : producto
+            );
+        }
         return res.status(200).send(usuarios);
     } catch (error) {
         return responderError(res, error, 'No se pudieron obtener los usuarios');
@@ -78,6 +95,9 @@ async function crearUsuario(req, res) {
             _id: req.body._id ?? await obtenerSiguienteId(),
             ...req.body
         };
+        if (mongoEstaConectado() && !await productosExisten(datosUsuario.productos)) {
+            return res.status(400).send({ mensaje: 'Uno o mas productos indicados no existen' });
+        }
         const usuarioNuevo = new Usuario(datosUsuario);
 
         await usuarioNuevo.validate();
@@ -89,6 +109,7 @@ async function crearUsuario(req, res) {
         }
 
         const usuario = await usuarioNuevo.save();
+        await usuario.populate({ path: 'productos', populate: { path: 'categoria' } });
         return res.status(201).send({ mensaje: 'Usuario creado correctamente', usuario: ocultarPassword(usuario.toObject()) });
     } catch (error) {
         return responderError(res, error, 'No se pudo crear el usuario');
@@ -102,6 +123,9 @@ async function actualizarUsuario(req, res) {
         }
 
         const filtro = obtenerFiltroPorId(req.params.id);
+        if (mongoEstaConectado() && req.body.productos && !await productosExisten(req.body.productos)) {
+            return res.status(400).send({ mensaje: 'Uno o mas productos indicados no existen' });
+        }
 
         if (!mongoEstaConectado()) {
             const indice = usuariosMemoria.findIndex((usuario) => usuario._id === filtro._id);
@@ -118,7 +142,7 @@ async function actualizarUsuario(req, res) {
             filtro,
             { $set: req.body },
             { new: true, runValidators: true, projection: { password: 0, __v: 0 } }
-        ).lean();
+        ).populate({ path: 'productos', populate: { path: 'categoria' } }).lean();
 
         if (!usuario) return res.status(404).send({ mensaje: 'Usuario no encontrado' });
         return res.status(200).send({ mensaje: 'Usuario actualizado correctamente', usuario });
